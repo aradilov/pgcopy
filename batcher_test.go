@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const connString = "postgres://USER:PASS@localhost:5432/dcrdb"
+const connString = "postgres://USER:PASSWORD@localhost:5432/test"
 
 func TestSingleBatcher(t *testing.T) {
 	batcher, err := NewBatcherSingle(BatcherConfig{
@@ -36,9 +36,9 @@ func TestSingleBatcher(t *testing.T) {
 		})
 	}
 
-	err, errorsCount := batcher.Stop()
+	err, errorsCount := batcher.stop()
 	assert.NoError(t, err)
-	assert.Equal(t, 0, errorsCount, fmt.Sprintf("Expected 0 erorrs, got %d", errorsCount))
+	assert.Equal(t, 0, errorsCount, fmt.Sprintf("Expected 0 errors, got %d", errorsCount))
 
 	var count int64
 	err = batcher.GetConn().QueryRow(context.Background(), "SELECT COUNT(*) FROM segments_100500").Scan(&count)

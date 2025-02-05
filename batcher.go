@@ -195,8 +195,13 @@ func (cb *Batcher) GetConn() *pgxpool.Pool {
 	cb.once.Do(cb.init)
 	return cb.conn
 }
-
 func (cb *Batcher) Stop() (err error, errorsCount int) {
+	err, errorsCount = cb.stop()
+	cb.conn.Close()
+	return err, errorsCount
+}
+
+func (cb *Batcher) stop() (err error, errorsCount int) {
 
 	for _, batcher := range cb.eventsBatchers {
 		batcher.Stop()
