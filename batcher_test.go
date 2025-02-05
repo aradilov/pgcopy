@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const connString = "postgres://dcrdbuser:wGKB85Eki3R1Gy83h@localhost:5432/dcrdb"
+const connString = "postgres://USER:PASS@localhost:5432/dcrdb"
 
 func TestSingleBatcher(t *testing.T) {
 	batcher, err := NewBatcherSingle(BatcherConfig{
