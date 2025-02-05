@@ -44,7 +44,7 @@ In case of errors, the recording can be repeated in the background process again
 
 
 ```go
-    // Folder for string batches in case of errors. Batches are dropped if rescueDir is empty.
+    // Folder for storing batches in case of errors. Batches are dropped if rescueDir is empty.
     rescueDir := "/tmp"
     batcher := NewBatcher(BatcherConfig{
 		TableName:    "segments_100500",
