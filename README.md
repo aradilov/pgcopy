@@ -9,7 +9,7 @@ Writing data via COPY rather than INSERT provides a number of advantages
 2) SQL injections are not possible, so writing data does not require escaping
 
 ## Batcher with controlled recording
-If you need to record a large amount of information and control that the recording was successful, please, use NewBatcherSingle method
+If you need to record a large amount of data and control that the recording was successful, please, use NewBatcherSingle method
 
 ```go
     batcher, err := NewBatcherSingle(BatcherConfig{
