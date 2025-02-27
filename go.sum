@@ -1,5 +1,7 @@
 github.com/VictoriaMetrics/metrics v1.35.1 h1:o84wtBKQbzLdDy14XeskkCZih6anG+veZ1SwJHFGwrU=
 github.com/VictoriaMetrics/metrics v1.35.1/go.mod h1:r7hveu6xMdUACXvB8TYdAj8WEsKzWB0EkpJN+RDtOf8=
+github.com/aradilov/b v0.0.0-20250205104126-263363e104e0 h1:7rI3OqwcdYg2KS75DYpZ+GTf6ZXX/uHRtEv8mWPsJ4c=
+github.com/aradilov/b v0.0.0-20250205104126-263363e104e0/go.mod h1:yN1VF+x4XIXxFAWIpsCcJE4CkKrBEeYrypWLc2DByyA=
 github.com/aradilov/batcher v0.0.0-20250205104126-263363e104e0 h1:7rI3OqwcdYg2KS75DYpZ+GTf6ZXX/uHRtEv8mWPsJ4c=
 github.com/aradilov/batcher v0.0.0-20250205104126-263363e104e0/go.mod h1:yN1VF+x4XIXxFAWIpsCcJE4CkKrBEeYrypWLc2DByyA=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=

@@ -4,16 +4,17 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-const connString = "postgres://USER:PASSWORD@localhost:5432/test"
+const connString = "postgres://dcrdbuser:wGKB85Eki3R1Gy83h@localhost:5436/dcrdb"
 
 func TestSingleBatcher(t *testing.T) {
 	batcher, err := NewBatcherSingle(BatcherConfig{
-		TableName:    "segments_100500",
+		TableName:    "test",
 		TableColumns: "segment_id,client_id,uid",
 		ConnAddr:     connString,
 
@@ -23,7 +24,7 @@ func TestSingleBatcher(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_, err = batcher.GetConn().Exec(context.Background(), "DELETE FROM segments_100500")
+	_, err = batcher.GetConn().Exec(context.Background(), "truncate table test;")
 	assert.NoError(t, err)
 
 	records := int(1e6)
@@ -36,29 +37,31 @@ func TestSingleBatcher(t *testing.T) {
 		})
 	}
 
-	err, errorsCount := batcher.stop()
+	err, errorsCount := batcher.Stop()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, errorsCount, fmt.Sprintf("Expected 0 errors, got %d", errorsCount))
 
 	var count int64
-	err = batcher.GetConn().QueryRow(context.Background(), "SELECT COUNT(*) FROM segments_100500").Scan(&count)
+	pool, err := pgxpool.New(context.Background(), connString)
+	assert.NoError(t, err)
+
+	err = pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM test").Scan(&count)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(records), count)
-
 }
 
 func TestBatcher(t *testing.T) {
-	batcher := NewBatcher(BatcherConfig{
-		TableName:    "segments_100500",
+	batcher := NewBatcherClassic(BatcherConfig{
+		TableName:    "test",
 		TableColumns: "segment_id,client_id,uid",
 		ConnAddr:     connString,
 
 		MaxBatchSize:  100e3,
-		MaxBatchDelay: time.Second * 5,
+		MaxBatchDelay: time.Millisecond * 5,
 		MaxRetries:    10,
 	}, "", "testPrefix")
 
-	_, err := batcher.GetConn().Exec(context.Background(), "DELETE FROM segments_100500")
+	_, err := batcher.GetConn().Exec(context.Background(), "truncate table test")
 	assert.NoError(t, err)
 
 	records := int(1e6)
@@ -71,10 +74,10 @@ func TestBatcher(t *testing.T) {
 		})
 	}
 
-	time.Sleep(batcher.MaxBatchDelay * 2)
+	time.Sleep(10 * time.Second)
 
 	var count int64
-	err = batcher.GetConn().QueryRow(context.Background(), "SELECT COUNT(*) FROM segments_100500").Scan(&count)
+	err = batcher.GetConn().QueryRow(context.Background(), "SELECT COUNT(*) FROM test").Scan(&count)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(records), count)
 

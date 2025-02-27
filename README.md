@@ -12,7 +12,7 @@ Writing data via COPY rather than INSERT provides a number of advantages
 If you need to record a large amount of data and control that the recording was successful, please, use NewBatcherSingle method
 
 ```go
-    batcher, err := NewBatcherSingle(BatcherConfig{
+    b, err := NewBatcherSingle(BatcherConfig{
 		TableName:    "segments_100500",
 		TableColumns: "segment_id,client_id,uid",
 		ConnAddr:     connString,
@@ -25,28 +25,28 @@ If you need to record a large amount of data and control that the recording was 
 	
 	records := int(1e6)
 	for i := 0; i < records; i++ {
-		batcher.PushRow(func(b []byte) []byte {
-			b, _ = batcher.Append(b, 0, 100500) // colum 1
-			b, _ = batcher.Append(b, 1, 200500) // colum 2
-			b, _ = batcher.Append(b, 2, uuid.New()) // colum 3
+		b.PushRow(func(b []byte) []byte {
+			b, _ = b.Append(b, 0, 100500) // colum 1
+			b, _ = b.Append(b, 1, 200500) // colum 2
+			b, _ = b.Append(b, 2, uuid.New()) // colum 3
 			return b
 		})
 	}
 
 	// The stop method will split the write into batches and ensure that all background writes have completed.
 	// If there was an error, the last one that occurred is returned.
-	err, errorsCount := batcher.Stop()
+	err, errorsCount := b.Stop()
 ```
 
 ## Batcher without controlled recording
-In case you are using PostgreSQL for logging data or you do not need to control the recording, please use NewBatcher method
+In case you are using PostgreSQL for logging data or you do not need to control the recording, please use NewBatcherClassic method
 In case of errors, the recording can be repeated in the background process again
 
 
 ```go
     // Folder for storing batches in case of errors. Batches are dropped if rescueDir is empty.
     rescueDir := "/tmp"
-    batcher := NewBatcher(BatcherConfig{
+    b := NewBatcherClassic(BatcherConfig{
 		TableName:    "segments_100500",
 		TableColumns: "segment_id,client_id,uid",
 		ConnAddr:     connString,
@@ -60,10 +60,10 @@ In case of errors, the recording can be repeated in the background process again
 	records := int(1e6)
 	for i := 0; i < records; i++ {
 		// Recording occurs in the background process upon the occurrence of one of the events MaxBatchSize or MaxBatchDelay
-		batcher.PushRow(func(b []byte) []byte {
-			b, _ = batcher.Append(b, 0, 100500) // colum 1
-			b, _ = batcher.Append(b, 1, 200500) // colum 2
-			b, _ = batcher.Append(b, 2, uuid.New()) // colum 3
+		b.PushRow(func(b []byte) []byte {
+			b, _ = b.Append(b, 0, 100500) // colum 1
+			b, _ = b.Append(b, 1, 200500) // colum 2
+			b, _ = b.Append(b, 2, uuid.New()) // colum 3
 			return b
 		})
 	}
