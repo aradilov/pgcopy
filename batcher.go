@@ -14,10 +14,6 @@ type BatcherConfig struct {
 	// Write timeout for COPY command
 	WriteTimeout time.Duration
 
-	// MaxRetries is the maximum number of retries before giving up when
-	// sending batches to DBMS.
-	MaxRetries int
-
 	// Table name
 	TableName string
 

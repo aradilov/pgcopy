@@ -23,13 +23,6 @@ import (
 	"time"
 )
 
-func NewBatcherClassic(cfg BatcherConfig, rescueDir, metricPrefix string) Batcher {
-	bt := &BatcherClassic{BatcherConfig: cfg}
-	bt.rescueDir = rescueDir
-	bt.metricPrefix = metricPrefix
-	return bt
-}
-
 // BatcherClassic pushes row batches into DBMS.
 type BatcherClassic struct {
 	BatcherConfig
@@ -80,6 +73,18 @@ type BatcherClassic struct {
 	totalColumns      int
 
 	m *pgtype.Map
+
+	// maxRetries is the maximum number of retries before giving up when
+	// sending batches to DBMS.
+	maxRetries uint
+}
+
+func NewBatcherClassic(cfg BatcherConfig, rescueDir, metricPrefix string, maxRetries uint) Batcher {
+	bt := &BatcherClassic{BatcherConfig: cfg}
+	bt.rescueDir = rescueDir
+	bt.metricPrefix = metricPrefix
+	bt.maxRetries = maxRetries
+	return bt
 }
 
 // PushRow pushes new row into batcher.
@@ -116,6 +121,11 @@ func (cb *BatcherClassic) GetPushFailure() uint64 {
 }
 
 func (cb *BatcherClassic) Append(b []byte, pos int, v any) ([]byte, error) {
+	// prevent out of range fatal
+	if pos >= len(cb.statementDescription.Fields) {
+		return b, fmt.Errorf("position %d out of range of len(columns)=%d", pos, len(cb.statementDescription.Fields))
+	}
+
 	sp := len(b)
 	b = AppendInt32(b, -1)
 	argBuf, err := cb.m.Encode(cb.statementDescription.Fields[pos].DataTypeOID, pgtype.BinaryFormatCode, v, b)
@@ -276,8 +286,6 @@ func (cb *BatcherClassic) initMetrics() {
 }
 
 func (cb *BatcherClassic) concurrentPushBatchToDB(sql []byte, itemsCount int) {
-	//attemptsCount := 0
-
 	select {
 	case cb.concurrentBatchesCh <- struct{}{}:
 		sqlCopy := make([]byte, 0, len(sql))
@@ -289,23 +297,9 @@ func (cb *BatcherClassic) concurrentPushBatchToDB(sql []byte, itemsCount int) {
 			<-cb.concurrentBatchesCh
 		}()
 	default:
-		//
-		//if cb.singleTransaction {
-		//	attemptsCount++
-		//	if attemptsCount >= cb.MaxRetries {
-		//		atomic.AddUint32(&cb.singleTransactionErrors, 1)
-		//		cb.singleTransactionAnyError.Store(fmt.Errorf("concurrent insert batches' limit %d exceeded", cap(cb.concurrentBatchesCh)))
-		//	} else {
-		//		//log.Printf("concurrent insert batches' limit %d exceeded, re-try in 1s", cap(cb.concurrentBatchesCh))
-		//		time.Sleep(time.Second)
-		//		cb.concurrentPushBatchToDB(sql, itemsCount)
-		//	}
-		//	return
-		//}
-
 		cb.concurrentBatchesOverflow.Inc()
 		if !cb.HideConcurrentInsertBatchError {
-			log.Printf("%s: concurrent insert batches' limit %d exceeded",
+			log.Printf("%s: concurrent insert batches limit %d exceeded",
 				cb.metricPrefix, cap(cb.concurrentBatchesCh))
 		}
 
@@ -316,7 +310,7 @@ func (cb *BatcherClassic) concurrentPushBatchToDB(sql []byte, itemsCount int) {
 }
 
 func (cb *BatcherClassic) pushBatchToDB(sql []byte, itemsCount int) {
-	attemptsCount := 0
+	attemptsCount := uint(0)
 	for {
 		err := cb.batchInsert(sql)
 		if err == nil {
@@ -326,7 +320,7 @@ func (cb *BatcherClassic) pushBatchToDB(sql []byte, itemsCount int) {
 		}
 
 		attemptsCount++
-		if attemptsCount >= cb.MaxRetries {
+		if attemptsCount >= cb.maxRetries {
 			log.Printf("%s: cannot insert batch to DBMS: %s", cb.metricPrefix, err)
 			cb.pushRowError.Add(itemsCount)
 			cb.pushBatchError.Inc()

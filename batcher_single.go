@@ -97,6 +97,11 @@ func (cb *BatcherSingle) GetPushFailure() uint64 {
 }
 
 func (cb *BatcherSingle) Append(b []byte, pos int, v any) ([]byte, error) {
+	// prevent out of range fatal
+	if pos >= len(cb.statementDescription.Fields) {
+		return b, fmt.Errorf("position %d out of range of len(columns)=%d", pos, len(cb.statementDescription.Fields))
+	}
+
 	sp := len(b)
 	b = AppendInt32(b, -1)
 	argBuf, err := cb.m.Encode(cb.statementDescription.Fields[pos].DataTypeOID, pgtype.BinaryFormatCode, v, b)
@@ -227,12 +232,12 @@ func (cb *BatcherSingle) initMetrics() {
 }
 
 func (cb *BatcherSingle) concurrentPushBatchToDB(sql []byte, itemsCount int) {
-	if sql == nil || len(sql) < 18 {
-		log.Println("Weird SQL w/o signature: ", string(sql))
+	if len(sql) < 19 {
+		log.Println("Weird SQL w/o PGCOPY signature: ", string(sql))
 		return
 	}
 
-	// mark the batch so we don't lose it!
+	// mark the batch so it doesn't get lost if batcher.Stop is called
 	cb.singleTransactionWaitGroup.Add(1)
 
 	// just wait until we have a free slot
@@ -257,7 +262,6 @@ func (cb *BatcherSingle) pushBatchToDB(sql []byte, _ int) {
 	atomic.AddUint32(&cb.singleTransactionErrors, 1)
 	cb.singleTransactionAnyError.Store(err)
 	return
-
 }
 
 func (cb *BatcherSingle) batchInsert(sql []byte) error {
