@@ -10,13 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
-	"os"
-	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 )
 
 type BatcherSingle struct {
@@ -26,18 +23,6 @@ type BatcherSingle struct {
 	metricPrefix string
 
 	concurrentBatchesOverflow *metric.Counter
-
-	pushRowSuccess  *metric.Counter
-	pushRowOverflow *metric.Counter
-	pushRowError    *metric.Counter
-
-	pushBatchDuration *metric.Histogram
-	pushBatchSize     *metric.Histogram
-	pushBatchBytes    *metric.Counter
-
-	pushBatchSuccess *metric.Counter
-	pushBatchError   *metric.Counter
-	pushBatchRetries *metric.Counter
 
 	concurrentBatchesCh chan struct{}
 
@@ -56,7 +41,7 @@ type BatcherSingle struct {
 	m *pgtype.Map
 
 	singleTransactionAnyError  atomic.Value
-	singleTransactionErrors    uint32
+	singleTransactionErrors    uint64
 	singleTransactionWaitGroup sync.WaitGroup
 }
 
@@ -93,7 +78,7 @@ func (cb *BatcherSingle) PushRow(appendRow func(b []byte) []byte) {
 // GetPushFailure returns the total number of rows failed to be sent
 // to DBMS due to various reasons.
 func (cb *BatcherSingle) GetPushFailure() uint64 {
-	return cb.pushRowOverflow.Get() + cb.pushRowError.Get()
+	return cb.singleTransactionErrors
 }
 
 func (cb *BatcherSingle) Append(b []byte, pos int, v any) ([]byte, error) {
@@ -127,8 +112,6 @@ func (cb *BatcherSingle) Stop() (err error, errorsCount int) {
 }
 
 func (cb *BatcherSingle) controlledInitialization() error {
-	cb.initMetrics()
-
 	cb.quotedTableName = sanitize(strings.Split(cb.TableName, "."), ".")
 
 	columns := strings.Split(cb.TableColumns, ",")
@@ -197,43 +180,12 @@ func (cb *BatcherSingle) stop() (err error, errorsCount int) {
 	if nil == av {
 		return nil, 0
 	}
-	return av.(error), int(atomic.LoadUint32(&cb.singleTransactionErrors))
-}
-
-func (cb *BatcherSingle) init() {
-	err := cb.controlledInitialization()
-	if nil != err {
-		log.Fatalf("Error while initializaing BatcherSingle: %v", err)
-	}
-
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
-		<-c
-
-		cb.conn.Close()
-	}()
-}
-
-func (cb *BatcherSingle) initMetrics() {
-	cb.concurrentBatchesOverflow = metric.NewCounter(cb.metricPrefix + "ConcurrentBatchesOverflow")
-
-	cb.pushRowSuccess = metric.NewCounter(cb.metricPrefix + "PushRowSuccess")
-	cb.pushRowOverflow = metric.NewCounter(cb.metricPrefix + "PushRowOverflow")
-	cb.pushRowError = metric.NewCounter(cb.metricPrefix + "PushRowError")
-
-	cb.pushBatchDuration = metric.NewHistogram(cb.metricPrefix + "PushBatchDuration")
-	cb.pushBatchSize = metric.NewHistogram(cb.metricPrefix + "PushBatchSize")
-	cb.pushBatchBytes = metric.NewCounter(cb.metricPrefix + "PushBatchBytes")
-
-	cb.pushBatchSuccess = metric.NewCounter(cb.metricPrefix + "PushBatchSuccess")
-	cb.pushBatchError = metric.NewCounter(cb.metricPrefix + "PushBatchError")
-	cb.pushBatchRetries = metric.NewCounter(cb.metricPrefix + "PushBatchRetries")
+	return av.(error), int(atomic.LoadUint64(&cb.singleTransactionErrors))
 }
 
 func (cb *BatcherSingle) concurrentPushBatchToDB(sql []byte, itemsCount int) {
 	if len(sql) < 19 {
-		log.Println("Weird SQL w/o PGCOPY signature: ", string(sql))
+		log.Printf("Weird SQL w/o PGCOPY signature: %q", string(sql))
 		return
 	}
 
@@ -259,7 +211,7 @@ func (cb *BatcherSingle) pushBatchToDB(sql []byte, _ int) {
 		return
 	}
 
-	atomic.AddUint32(&cb.singleTransactionErrors, 1)
+	atomic.AddUint64(&cb.singleTransactionErrors, 1)
 	cb.singleTransactionAnyError.Store(err)
 	return
 }
